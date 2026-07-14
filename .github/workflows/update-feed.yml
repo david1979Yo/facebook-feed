@@ -2,8 +2,9 @@ name: Actualizar feed Meta
 
 on:
   workflow_dispatch:
+
   schedule:
-    - cron: '0 1 * * *'
+    - cron: "0 1 * * *"
 
 permissions:
   contents: write
@@ -16,9 +17,16 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
-      - name: Descargar feed
+      - name: Regenerar feed Prestashop
         run: |
-          curl -L "https://www.joyeriaparejo.com/facebook-feed.xml" -o facebook-feed.xml
+          curl -L "https://www.joyeriaparejo.com/module/gmerchantfeedes/generation?key=3&token=c470ff7b48edea476cc8ff978c0f42e1&only_rebuild=1"
+
+      - name: Esperar generación
+        run: sleep 20
+
+      - name: Descargar nuevo feed
+        run: |
+          curl -L "https://www.joyeriaparejo.com/module/gmerchantfeedes/generation?key=3&token=c470ff7b48edea476cc8ff978c0f42e1&only_download=1" -o facebook-feed.xml
 
       - name: Commit si hay cambios
         run: |
