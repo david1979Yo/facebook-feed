@@ -1,0 +1,36 @@
+name: Actualizar feed Meta
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  update-feed:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Descargar feed
+        run: |
+          curl -L "https://www.joyeriaparejo.com/facebook-feed.xml" -o facebook-feed.xml
+
+      - name: Commit si hay cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add facebook-feed.xml
+
+          if git diff --cached --quiet; then
+            echo "Sin cambios"
+            exit 0
+          fi
+
+          git commit -m "Actualización automática del feed"
+          git push
