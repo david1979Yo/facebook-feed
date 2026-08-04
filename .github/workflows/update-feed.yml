@@ -19,19 +19,60 @@ jobs:
 
       - name: Regenerar feed Prestashop
         run: |
-          curl --fail -L "https://www.joyeriaparejo.com/module/gmerchantfeedes/generation?key=3&token=c470ff7b48edea476cc8ff978c0f42e1&only_rebuild=1"
+          HTTP_CODE=$(curl -sS -L \
+            --retry 3 \
+            --retry-delay 5 \
+            --retry-all-errors \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36" \
+            -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
+            -H "Accept-Language: es-ES,es;q=0.9" \
+            -o /tmp/rebuild-response.txt \
+            -w "%{http_code}" \
+            "https://www.joyeriaparejo.com/module/gmerchantfeedes/generation?key=3&token=${{ secrets.META_FEED_TOKEN }}&only_rebuild=1")
+
+          echo "Código HTTP recibido: $HTTP_CODE"
+          echo "Respuesta del servidor:"
+          cat /tmp/rebuild-response.txt || true
+
+          if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
+            echo "ERROR: PrestaShop ha devuelto el código HTTP $HTTP_CODE"
+            exit 1
+          fi
 
       - name: Esperar generación
-        run: sleep 20
+        run: sleep 30
 
       - name: Descargar nuevo feed
         run: |
-          curl --fail -L "https://www.joyeriaparejo.com/module/gmerchantfeedes/generation?key=3&token=c470ff7b48edea476cc8ff978c0f42e1&only_download=1" -o facebook-feed.xml
+          HTTP_CODE=$(curl -sS -L \
+            --retry 3 \
+            --retry-delay 5 \
+            --retry-all-errors \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36" \
+            -H "Accept: application/xml,text/xml;q=0.9,*/*;q=0.8" \
+            -H "Accept-Language: es-ES,es;q=0.9" \
+            -o facebook-feed.xml \
+            -w "%{http_code}" \
+            "https://www.joyeriaparejo.com/module/gmerchantfeedes/generation?key=3&token=${{ secrets.META_FEED_TOKEN }}&only_download=1")
+
+          echo "Código HTTP recibido: $HTTP_CODE"
+
+          if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
+            echo "ERROR: No se ha podido descargar el feed. Código HTTP $HTTP_CODE"
+            echo "Contenido recibido:"
+            head -n 30 facebook-feed.xml || true
+            exit 1
+          fi
 
           echo "Primeras líneas del archivo:"
           head -n 5 facebook-feed.xml
 
-          grep -q "<?xml" facebook-feed.xml || (echo "ERROR: No se ha descargado un XML válido" && exit 1)
+          if ! grep -q "<?xml" facebook-feed.xml; then
+            echo "ERROR: El archivo descargado no contiene un XML válido"
+            echo "Contenido recibido:"
+            head -n 30 facebook-feed.xml
+            exit 1
+          fi
 
       - name: Commit si hay cambios
         run: |
@@ -41,9 +82,9 @@ jobs:
           git add facebook-feed.xml
 
           if git diff --cached --quiet; then
-            echo "Sin cambios"
+            echo "El feed no contiene cambios"
             exit 0
           fi
 
-          git commit -m "Actualización automática del feed"
+          git commit -m "Actualización automática del feed Meta"
           git push
